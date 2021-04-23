@@ -306,12 +306,12 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 	}
 
 	if ((client->flags & FLAG_LATEST) && (client->flags & FLAG_CUSTOM)) {
-		error("ERROR: FLAG_LATEST cannot be used with FLAG_CUSTOM.\n");
+		error("RESTORE ERROR: FLAG_LATEST cannot be used with FLAG_CUSTOM.\n");
 		return -1;
 	}
 
 	if (!client->ipsw && !(client->flags & FLAG_PWN) && !(client->flags & FLAG_LATEST)) {
-		error("ERROR: no ipsw file given\n");
+		error("RESTORE ERROR: no ipsw file given\n");
 		return -1;
 	}
 
@@ -333,7 +333,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 	cond_wait_timeout(&client->device_event_cond, &client->device_event_mutex, 10000);
 	if (client->mode == &idevicerestore_modes[MODE_UNKNOWN] || (client->flags & FLAG_QUIT)) {
 		mutex_unlock(&client->device_event_mutex);
-		error("ERROR: Unable to discover device mode. Please make sure a device is attached.\n");
+		error("RESTORE ERROR: Unable to discover device mode. Please make sure a device is attached.\n");
 		return -1;
 	}
 	idevicerestore_progress(client, RESTORE_STEP_DETECT, 0.1);
@@ -344,11 +344,11 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 		unsigned int cpid = 0;
 
 		if (dfu_client_new(client) != 0) {
-			error("ERROR: Could not open device in WTF mode\n");
+			error("RESTORE ERROR: Could not open device in WTF mode\n");
 			return -1;
 		}
 		if ((dfu_get_cpid(client, &cpid) < 0) || (cpid == 0)) {
-			error("ERROR: Could not get CPID for WTF mode device\n");
+			error("RESTORE ERROR: Could not get CPID for WTF mode device\n");
 			dfu_client_free(client);
 			return -1;
 		}
@@ -400,25 +400,25 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 
 			ipsw_extract_to_memory(wtfipsw, wtfname, &wtftmp, &wtfsize);
 			if (!wtftmp) {
-				error("ERROR: Could not extract WTF\n");
+				error("RESTORE ERROR: Could not extract WTF\n");
 			}
 		}
 
 		mutex_lock(&client->device_event_mutex);
 		if (wtftmp) {
 			if (dfu_send_buffer(client, wtftmp, wtfsize) != 0) {
-				error("ERROR: Could not send WTF...\n");
+				error("RESTORE ERROR: Could not send WTF...\n");
 			}
 		}
 		dfu_client_free(client);
 
 		free(wtftmp);
 
-		cond_wait_timeout(&client->device_event_cond, &client->device_event_mutex, 10000);
+		cond_wait_timeout(&client->device_event_cond, &client->device_event_mutex, 60000);
 		if (client->mode != &idevicerestore_modes[MODE_DFU] || (client->flags & FLAG_QUIT)) {
 			mutex_unlock(&client->device_event_mutex);
 			/* TODO: verify if it actually goes from 0x1222 -> 0x1227 */
-			error("ERROR: Failed to put device into DFU from WTF mode\n");
+			error("RESTORE ERROR: Failed to put device into DFU from WTF mode\n");
 			return -1;
 		}
 		mutex_unlock(&client->device_event_mutex);
@@ -427,14 +427,14 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 	// discover the device type
 	client->device = get_irecv_device(client);
 	if (client->device == NULL) {
-		error("ERROR: Unable to discover device type\n");
+		error("RESTORE ERROR: Unable to discover device type\n");
 		return -1;
 	}
 	idevicerestore_progress(client, RESTORE_STEP_DETECT, 0.2);
 	info("Identified device as %s, %s\n", client->device->hardware_model, client->device->product_type);
 
 	if ((client->flags & FLAG_PWN) && (client->mode->index != MODE_DFU)) {
-		error("ERROR: you need to put your device into DFU mode to pwn it.\n");
+		error("RESTORE ERROR: you need to put your device into DFU mode to pwn it.\n");
 		return -1;
 	}
 
@@ -442,7 +442,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 		recovery_client_free(client);
 
 		if (client->mode->index != MODE_DFU) {
-			error("ERROR: Device needs to be in DFU mode for this option.\n");
+			error("RESTORE ERROR: Device needs to be in DFU mode for this option.\n");
 			return -1;
 		}
 
@@ -453,7 +453,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 		info("exploiting with limera1n...\n");
 		// TODO: check for non-limera1n device and fail
 		if (limera1n_exploit(client->device, &client->dfu->client) != 0) {
-			error("ERROR: limera1n exploit failed\n");
+			error("RESTORE ERROR: limera1n exploit failed\n");
 			dfu_client_free(client);
 			return -1;
 		}
@@ -470,13 +470,13 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 		plist_t signed_fws = NULL;
 		int res = ipsw_get_signed_firmwares(client->device->product_type, &signed_fws);
 		if (res < 0) {
-			error("ERROR: Could not fetch list of signed firmwares.\n");
+			error("RESTORE ERROR: Could not fetch list of signed firmwares.\n");
 			return res;
 		}
 		uint32_t count = plist_array_get_size(signed_fws);
 		if (count == 0) {
 			plist_free(signed_fws);
-			error("ERROR: No firmwares are currently being signed for %s (REALLY?!)\n", client->device->product_type);
+			error("RESTORE ERROR: No firmwares are currently being signed for %s (REALLY?!)\n", client->device->product_type);
 			return -1;
 		}
 		plist_t selected_fw = NULL;
@@ -594,7 +594,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			cond_wait_timeout(&client->device_event_cond, &client->device_event_mutex, 60000);
 			if (client->mode == &idevicerestore_modes[MODE_UNKNOWN] || (client->flags & FLAG_QUIT)) {
 				mutex_unlock(&client->device_event_mutex);
-				error("ERROR: Unable to discover device mode. Please make sure a device is attached.\n");
+				error("RESTORE ERROR: Unable to discover device mode. Please make sure a device is attached.\n");
 				return -1;
 			}
 			info("Found device in %s mode\n", client->mode->string);
@@ -604,7 +604,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 
 	// verify if ipsw file exists
 	if (access(client->ipsw, F_OK) < 0) {
-		error("ERROR: Firmware file %s does not exist.\n", client->ipsw);
+		error("RESTORE ERROR: Firmware file %s does not exist.\n", client->ipsw);
 		return -1;
 	}
 
@@ -613,13 +613,13 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 	if (client->flags & FLAG_CUSTOM) {
 		info("Extracting Restore.plist from IPSW\n");
 		if (ipsw_extract_restore_plist(client->ipsw, &buildmanifest) < 0) {
-			error("ERROR: Unable to extract Restore.plist from %s. Firmware file might be corrupt.\n", client->ipsw);
+			error("RESTORE ERROR: Unable to extract Restore.plist from %s. Firmware file might be corrupt.\n", client->ipsw);
 			return -1;
 		}
 	} else {
 		info("Extracting BuildManifest from IPSW\n");
 		if (ipsw_extract_build_manifest(client->ipsw, &buildmanifest, &tss_enabled) < 0) {
-			error("ERROR: Unable to extract BuildManifest from %s. Firmware file might be corrupt.\n", client->ipsw);
+			error("RESTORE ERROR: Unable to extract BuildManifest from %s. Firmware file might be corrupt.\n", client->ipsw);
 			return -1;
 		}
 	}
@@ -627,7 +627,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 
 	/* check if device type is supported by the given build manifest */
 	if (build_manifest_check_compatibility(buildmanifest, client->device->product_type) < 0) {
-		error("ERROR: Could not make sure this firmware is suitable for the current device. Refusing to continue.\n");
+		error("RESTORE ERROR: Could not make sure this firmware is suitable for the current device. Refusing to continue.\n");
 		return -1;
 	}
 
@@ -778,11 +778,11 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			// add OS filesystem
 			node = plist_dict_get_item(buildmanifest, "SystemRestoreImages");
 			if (!node) {
-				error("ERROR: missing SystemRestoreImages in Restore.plist\n");
+				error("RESTORE ERROR: missing SystemRestoreImages in Restore.plist\n");
 			}
 			plist_t os = plist_dict_get_item(node, "User");
 			if (!os) {
-				error("ERROR: missing filesystem in Restore.plist\n");
+				error("RESTORE ERROR: missing filesystem in Restore.plist\n");
 			} else {
 				inf = plist_new_dict();
 				plist_dict_set_item(inf, "Path", plist_copy(os));
@@ -901,7 +901,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 	// Get filesystem name from build identity
 	char* fsname = NULL;
 	if (build_identity_get_component_path(build_identity, "OS", &fsname) < 0) {
-		error("ERROR: Unable to get path for filesystem component\n");
+		error("RESTORE ERROR: Unable to get path for filesystem component\n");
 		return -1;
 	}
 
@@ -971,7 +971,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			// use temp filename
 			filesystem = get_temp_filename("ipsw_");
 			if (!filesystem) {
-				error("WARNING: Could not get temporary filename, using '%s' in current directory\n", fsname);
+				error("RESTORE WARNING: Could not get temporary filename, using '%s' in current directory\n", fsname);
 				filesystem = strdup(fsname);
 			}
 			delete_fs = 1;
@@ -985,7 +985,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 		// Extract filesystem from IPSW
 		info("Extracting filesystem from IPSW: %s\n", fsname);
 		if (ipsw_extract_to_file_with_progress(client->ipsw, fsname, filesystem, 1) < 0) {
-			error("ERROR: Unable to extract filesystem from IPSW\n");
+			error("RESTORE ERROR: Unable to extract filesystem from IPSW\n");
 			if (client->tss)
 				plist_free(client->tss);
 			plist_free(buildmanifest);
@@ -1011,7 +1011,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 		debug("Getting device's ECID for TSS request\n");
 		/* fetch the device's ECID for the TSS request */
 		if (get_ecid(client, &client->ecid) < 0) {
-			error("ERROR: Unable to find device ECID\n");
+			error("RESTORE ERROR: Unable to find device ECID\n");
 			return -1;
 		}
 		info("Found ECID %" PRIu64 "\n", client->ecid);
@@ -1026,16 +1026,16 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 				info("Checking if device requires stashbag...\n");
 				plist_t manifest;
 				if (get_preboard_manifest(client, build_identity, &manifest) < 0) {
-					error("ERROR: Unable to create preboard manifest.\n");
+					error("RESTORE ERROR: Unable to create preboard manifest.\n");
 					return -1;
 				}
 				debug("DEBUG: creating stashbag...\n");
 				int err = normal_handle_create_stashbag(client, manifest);
 				if (err < 0) {
 					if (err == -2) {
-						error("ERROR: Could not create stashbag (timeout).\n");
+						error("RESTORE ERROR: Could not create stashbag (timeout).\n");
 					} else {
-						error("ERROR: An error occurred while creating the stashbag.\n");
+						error("RESTORE ERROR: An error occurred while creating the stashbag.\n");
 					}
 					return -1;
 				} else if (err == 1) {
@@ -1068,19 +1068,19 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			return -1;
 		}
 		if (get_tss_response(client, build_identity, &client->tss) < 0) {
-			error("ERROR: Unable to get SHSH blobs for this device\n");
+			error("RESTORE ERROR: Unable to get SHSH blobs for this device\n");
 			return -1;
 		}
 		if (stashbag_commit_required) {
 			plist_t ticket = plist_dict_get_item(client->tss, "ApImg4Ticket");
 			if (!ticket || plist_get_node_type(ticket) != PLIST_DATA) {
-				error("ERROR: Missing ApImg4Ticket in TSS response for stashbag commit\n");
+				error("RESTORE ERROR: Missing ApImg4Ticket in TSS response for stashbag commit\n");
 				return -1;
 			}
 			info("Committing stashbag...\n");
 			int err = normal_handle_commit_stashbag(client, ticket);
 			if (err < 0) {
-				error("ERROR: Could not commit stashbag (%d). Aborting.\n", err);
+				error("RESTORE ERROR: Could not commit stashbag (%d). Aborting.\n", err);
 				return -1;
 			}
 		}
@@ -1097,7 +1097,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			return 0;
 		}
 		if (!client->tss) {
-			error("ERROR: could not fetch TSS record\n");
+			error("RESTORE ERROR: could not fetch TSS record\n");
 			plist_free(buildmanifest);
 			return -1;
 		} else {
@@ -1135,7 +1135,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 
 	/* verify if we have tss records if required */
 	if ((tss_enabled) && (client->tss == NULL)) {
-		error("ERROR: Unable to proceed without a TSS record.\n");
+		error("RESTORE ERROR: Unable to proceed without a TSS record.\n");
 		plist_free(buildmanifest);
 		return -1;
 	}
@@ -1155,7 +1155,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 	if (client->mode->index == MODE_NORMAL) {
 		info("Entering recovery mode...\n");
 		if (normal_enter_recovery(client) < 0) {
-			error("ERROR: Unable to place device into recovery mode from normal mode\n");
+			error("RESTORE ERROR: Unable to place device into recovery mode from normal mode\n");
 			if (client->tss)
 				plist_free(client->tss);
 			plist_free(buildmanifest);
@@ -1241,7 +1241,7 @@ int idevicerestore_start(struct idevicerestore_client_t* client)
 			return -2;
 		}
 		debug("Waiting for device to reconnect in recovery mode...\n");
-		cond_wait_timeout(&client->device_event_cond, &client->device_event_mutex, 10000);
+		cond_wait_timeout(&client->device_event_cond, &client->device_event_mutex, 60000);
 		if (client->mode != &idevicerestore_modes[MODE_RECOVERY] || (client->flags & FLAG_QUIT)) {
 			mutex_unlock(&client->device_event_mutex);
 			if (!(client->flags & FLAG_QUIT)) {

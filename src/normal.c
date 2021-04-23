@@ -262,7 +262,7 @@ int normal_enter_recovery(struct idevicerestore_client_t* client)
 	cond_wait_timeout(&client->device_event_cond, &client->device_event_mutex, 60000);
 	if (client->mode == &idevicerestore_modes[MODE_NORMAL] || (client->flags & FLAG_QUIT)) {
 		mutex_unlock(&client->device_event_mutex);
-		error("ERROR: Failed to place device in recovery mode\n");
+		error("NORMAL ERROR: Failed to place device in recovery mode\n");
 		return -1;
 	}
 
@@ -270,13 +270,13 @@ int normal_enter_recovery(struct idevicerestore_client_t* client)
 	cond_wait_timeout(&client->device_event_cond, &client->device_event_mutex, 60000);
 	if (client->mode != &idevicerestore_modes[MODE_RECOVERY] || (client->flags & FLAG_QUIT)) {
 		mutex_unlock(&client->device_event_mutex);
-		error("ERROR: Failed to enter recovery mode\n");
+		error("NORMAL ERROR: Failed to enter recovery mode\n");
 		return -1;
 	}
 	mutex_unlock(&client->device_event_mutex);
 
 	if (recovery_client_new(client) < 0) {
-		error("ERROR: Unable to enter recovery mode\n");
+		error("NORMAL ERROR: Unable to enter recovery mode\n");
 		return -1;
 	}
 
@@ -293,13 +293,13 @@ plist_t normal_get_lockdown_value(struct idevicerestore_client_t* client, const 
 
 	device_error = idevice_new(&device, client->udid);
 	if (device_error != IDEVICE_E_SUCCESS) {
-		error("ERROR: Unable to connect to device?!\n");
+		error("NORMAL ERROR: Unable to connect to device?!\n");
 		return NULL;
 	}
 
 	lockdown_error = lockdownd_client_new(device, &lockdown, "idevicerestore");
 	if (lockdown_error != LOCKDOWN_E_SUCCESS) {
-		error("ERROR: Unable to connect to lockdownd\n");
+		error("NORMAL ERROR: Unable to connect to lockdownd\n");
 		idevice_free(device);
 		return NULL;
 	}
@@ -366,7 +366,7 @@ int normal_get_ecid(struct idevicerestore_client_t* client, uint64_t* ecid)
 {
 	plist_t unique_chip_node = normal_get_lockdown_value(client, NULL, "UniqueChipID");
 	if (!unique_chip_node || plist_get_node_type(unique_chip_node) != PLIST_UINT) {
-		error("ERROR: Unable to get ECID\n");
+		error("NORMAL ERROR: Unable to get ECID\n");
 		return -1;
 	}
 	plist_get_uint_val(unique_chip_node, ecid);
@@ -379,7 +379,7 @@ int normal_get_preflight_info(struct idevicerestore_client_t* client, plist_t *p
 {
 	plist_t node = normal_get_lockdown_value(client, NULL, "FirmwarePreflightInfo");
 	if (!node || plist_get_node_type(node) != PLIST_DICT) {
-		error("ERROR: Unable to get FirmwarePreflightInfo\n");
+		error("NORMAL ERROR: Unable to get FirmwarePreflightInfo\n");
 		return -1;
 	}
 	*preflight_info = node;
@@ -407,7 +407,7 @@ int normal_handle_create_stashbag(struct idevicerestore_client_t* client, plist_
 
 	lerr = lockdownd_client_new_with_handshake(device, &lockdown, "idevicerestore");
 	if (lerr != LOCKDOWN_E_SUCCESS) {
-		error("ERROR: Could not connect to lockdownd (%d)\n", lerr);
+		error("NORMAL ERROR: Could not connect to lockdownd (%d)\n", lerr);
 		idevice_free(device);
 		return -1;
 	}
@@ -425,7 +425,7 @@ int normal_handle_create_stashbag(struct idevicerestore_client_t* client, plist_
 	}
 
 	if (lerr != LOCKDOWN_E_SUCCESS) {
-		error("ERROR: Could not start preboard service (%d)\n", lerr);
+		error("NORMAL ERROR: Could not start preboard service (%d)\n", lerr);
 		lockdownd_client_free(lockdown);
 		idevice_free(device);
 		return -1;
@@ -435,14 +435,14 @@ int normal_handle_create_stashbag(struct idevicerestore_client_t* client, plist_
 	lockdownd_service_descriptor_free(service);
 	lockdownd_client_free(lockdown);
 	if (perr != PREBOARD_E_SUCCESS) {
-		error("ERROR: Could not connect to preboard service (%d)\n", perr);
+		error("NORMAL ERROR: Could not connect to preboard service (%d)\n", perr);
 		idevice_free(device);
 		return -1;
 	}
 
 	perr = preboard_create_stashbag(preboard, manifest, NULL, NULL);
 	if (perr != PREBOARD_E_SUCCESS) {
-		error("ERROR: Failed to trigger stashbag creation (%d)\n", perr);
+		error("NORMAL ERROR: Failed to trigger stashbag creation (%d)\n", perr);
 		preboard_client_free(preboard);
 		idevice_free(device);
 		return -1;
@@ -455,7 +455,7 @@ int normal_handle_create_stashbag(struct idevicerestore_client_t* client, plist_
 		if (perr == PREBOARD_E_TIMEOUT) {
 			continue;
 		} else if (perr != PREBOARD_E_SUCCESS) {
-			error("ERROR: could not receive from preboard service\n");
+			error("NORMAL ERROR: could not receive from preboard service\n");
 			break;
 		} else {
 			plist_t node;
@@ -490,7 +490,7 @@ int normal_handle_create_stashbag(struct idevicerestore_client_t* client, plist_
 				break;
 			}
 			if (_plist_dict_get_bool(pl, "Timeout")) {
-				error("ERROR: Timeout while waiting for user to enter passcode.\n");
+				error("NORMAL ERROR: Timeout while waiting for user to enter passcode.\n");
 				result = -2;
 				plist_free(pl);
 				break;
@@ -526,13 +526,13 @@ int normal_handle_commit_stashbag(struct idevicerestore_client_t* client, plist_
 
 	device_err = idevice_new(&device, client->udid);
 	if (device_err != IDEVICE_E_SUCCESS) {
-		error("ERROR: Could not connect to device (%d)\n", device_err);
+		error("NORMAL ERROR: Could not connect to device (%d)\n", device_err);
 		return -1;
 	}
 
 	lerr = lockdownd_client_new_with_handshake(device, &lockdown, "idevicerestore");
 	if (lerr != LOCKDOWN_E_SUCCESS) {
-		error("ERROR: Could not connect to lockdownd (%d)\n", lerr);
+		error("NORMAL ERROR: Could not connect to lockdownd (%d)\n", lerr);
 		idevice_free(device);
 		return -1;
 	}
@@ -550,7 +550,7 @@ int normal_handle_commit_stashbag(struct idevicerestore_client_t* client, plist_
 	}
 
 	if (lerr != LOCKDOWN_E_SUCCESS) {
-		error("ERROR: Could not start preboard service (%d)\n", lerr);
+		error("NORMAL ERROR: Could not start preboard service (%d)\n", lerr);
 		lockdownd_client_free(lockdown);
 		idevice_free(device);
 		return -1;
@@ -560,14 +560,14 @@ int normal_handle_commit_stashbag(struct idevicerestore_client_t* client, plist_
 	lockdownd_service_descriptor_free(service);
 	lockdownd_client_free(lockdown);
 	if (perr != PREBOARD_E_SUCCESS) {
-		error("ERROR: Could not connect to preboard service (%d)\n", perr);
+		error("NORMAL ERROR: Could not connect to preboard service (%d)\n", perr);
 		idevice_free(device);
 		return -1;
 	}
 
 	perr = preboard_commit_stashbag(preboard, manifest, NULL, NULL);
 	if (perr != PREBOARD_E_SUCCESS) {
-		error("ERROR: Failed to trigger stashbag creation (%d)\n", perr);
+		error("NORMAL ERROR: Failed to trigger stashbag creation (%d)\n", perr);
 		preboard_client_free(preboard);
 		idevice_free(device);
 		return -1;
@@ -575,7 +575,7 @@ int normal_handle_commit_stashbag(struct idevicerestore_client_t* client, plist_
 
 	perr = preboard_receive_with_timeout(preboard, &pl, 30000);
 	if (perr != PREBOARD_E_SUCCESS) {
-		error("ERROR: could not receive from preboard service (%d)\n", perr);
+		error("NORMAL ERROR: could not receive from preboard service (%d)\n", perr);
 	} else {
 		int commit_complete = 0;
 		plist_t node = plist_dict_get_item(pl, "Error");
@@ -585,13 +585,13 @@ int normal_handle_commit_stashbag(struct idevicerestore_client_t* client, plist_
 			if (node) {
 				plist_get_string_val(node, &strval);
 			}
-			error("ERROR: Could not commit stashbag: %s\n", (strval) ? strval : "(Unknown error)");
+			error("NORMAL ERROR: Could not commit stashbag: %s\n", (strval) ? strval : "(Unknown error)");
 			free(strval);
 		} else if (_plist_dict_get_bool(pl, "StashbagCommitComplete")) {
 			info("Stashbag committed!\n");
 			result = 0;
 		} else {
-			error("ERROR: Unexpected reply from preboard service\n");
+			error("NORMAL ERROR: Unexpected reply from preboard service\n");
 			debug_plist(pl);
 		}
 		plist_free(pl);

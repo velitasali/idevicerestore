@@ -339,7 +339,7 @@ int dfu_enter_recovery(struct idevicerestore_client_t* client, plist_t build_ide
 	mutex_lock(&client->device_event_mutex);
 
 	if (dfu_send_component(client, build_identity, "iBSS") < 0) {
-		error("ERROR: Unable to send iBSS to device\n");
+		error("DFU ERROR: Unable to send iBSS to device\n");
 		irecv_close(client->dfu->client);
 		client->dfu->client = NULL;
 		return -1;
@@ -353,16 +353,16 @@ int dfu_enter_recovery(struct idevicerestore_client_t* client, plist_t build_ide
 		if (client->mode != &idevicerestore_modes[MODE_UNKNOWN] || (client->flags & FLAG_QUIT)) {
 			mutex_unlock(&client->device_event_mutex);
 			if (!(client->flags & FLAG_QUIT)) {
-				error("ERROR: Device did not disconnect. Possibly invalid iBSS. Reset device and try again.\n");
+				error("DFU ERROR: Device did not disconnect. Possibly invalid iBSS. Reset device and try again.\n");
 			}
 			return -1;
 		}
 		debug("Waiting for device to reconnect...\n");
-		cond_wait_timeout(&client->device_event_cond, &client->device_event_mutex, 10000);
+		cond_wait_timeout(&client->device_event_cond, &client->device_event_mutex, 60000);
 		if ((client->mode != &idevicerestore_modes[MODE_DFU] && client->mode != &idevicerestore_modes[MODE_RECOVERY]) || (client->flags & FLAG_QUIT)) {
 			mutex_unlock(&client->device_event_mutex);
 			if (!(client->flags & FLAG_QUIT)) {
-				error("ERROR: Device did not reconnect in DFU or recovery mode. Possibly invalid iBSS. Reset device and try again.\n");
+				error("DFU ERROR: Device did not reconnect in DFU or recovery mode. Possibly invalid iBSS. Reset device and try again.\n");
 			}
 			return -1;
 		}
@@ -374,7 +374,7 @@ int dfu_enter_recovery(struct idevicerestore_client_t* client, plist_t build_ide
 		int nonce_size = 0;
 		int nonce_changed = 0;
 		if (dfu_get_ap_nonce(client, &nonce, &nonce_size) < 0) {
-			error("ERROR: Unable to get ApNonce from device!\n");
+			error("DFU ERROR: Unable to get ApNonce from device!\n");
 			return -1;
 		}
 
@@ -400,7 +400,7 @@ int dfu_enter_recovery(struct idevicerestore_client_t* client, plist_t build_ide
 			// Welcome iOS5. We have to re-request the TSS with our nonce.
 			plist_free(client->tss);
 			if (get_tss_response(client, build_identity, &client->tss) < 0) {
-				error("ERROR: Unable to get SHSH blobs for this device\n");
+				error("DFU ERROR: Unable to get SHSH blobs for this device\n");
 				return -1;
 			}
 			if (!client->tss) {
@@ -428,7 +428,7 @@ int dfu_enter_recovery(struct idevicerestore_client_t* client, plist_t build_ide
 		if (client->mode == &idevicerestore_modes[MODE_RECOVERY]) {
 			if (irecv_send_command(client->dfu->client, "go") != IRECV_E_SUCCESS) {
 				mutex_unlock(&client->device_event_mutex);
-				error("ERROR: Unable to execute iBEC\n");
+				error("DFU ERROR: Unable to execute iBEC\n");
 				return -1;
 			}
 			irecv_usb_control_transfer(client->dfu->client, 0x21, 1, 0, 0, 0, 0, 5000);
@@ -441,23 +441,23 @@ int dfu_enter_recovery(struct idevicerestore_client_t* client, plist_t build_ide
 	if (client->mode != &idevicerestore_modes[MODE_UNKNOWN] || (client->flags & FLAG_QUIT)) {
 		mutex_unlock(&client->device_event_mutex);
 		if (!(client->flags & FLAG_QUIT)) {
-			error("ERROR: Device did not disconnect. Possibly invalid %s. Reset device and try again.\n", (client->build_major > 8) ? "iBEC" : "iBSS");
+			error("DFU ERROR: Device did not disconnect. Possibly invalid %s. Reset device and try again.\n", (client->build_major > 8) ? "iBEC" : "iBSS");
 		}
 		return -1;
 	}
-	debug("Waiting for device to reconnect in recovery mode...\n");
-	cond_wait_timeout(&client->device_event_cond, &client->device_event_mutex, 10000);
+	debug("DFU Waiting for device to reconnect in recovery mode...\n");
+	cond_wait_timeout(&client->device_event_cond, &client->device_event_mutex, 60000);
 	if (client->mode != &idevicerestore_modes[MODE_RECOVERY] || (client->flags & FLAG_QUIT)) {
 		mutex_unlock(&client->device_event_mutex);
 		if (!(client->flags & FLAG_QUIT)) {
-			error("ERROR: Device did not reconnect in recovery mode. Possibly invalid %s. Reset device and try again.\n", (client->build_major > 8) ? "iBEC" : "iBSS");
+			error("DFU ERROR: Device did not reconnect in recovery mode. Possibly invalid %s. Reset device and try again.\n", (client->build_major > 8) ? "iBEC" : "iBSS");
 		}
 		return -1;
 	}
 	mutex_unlock(&client->device_event_mutex);
 
 	if (recovery_client_new(client) < 0) {
-		error("ERROR: Unable to connect to recovery device\n");
+		error("DFU ERROR: Unable to connect to recovery device\n");
 		if (client->recovery->client) {
 			irecv_close(client->recovery->client);
 			client->recovery->client = NULL;
